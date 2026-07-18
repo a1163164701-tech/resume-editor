@@ -4,10 +4,45 @@ const originalResume = {
   title: "我的简历",
   avatar: "./assets/avatar-placeholder.svg",
   sectionTitles: {
+    basic: "个人信息",
     education: "教育经历",
     work: "工作经历",
     projects: "项目经历",
     skills: "专业技能",
+  },
+  fieldLabels: {
+    basic: {
+      name: "姓名",
+      birthDate: "出生年月",
+      gender: "性别",
+      phone: "电话",
+      email: "邮箱",
+      jobTarget: "求职意向",
+      salary: "期望薪资",
+    },
+    education: {
+      school: "学校",
+      degree: "学历",
+      major: "专业",
+      start: "开始年份",
+      end: "结束年份",
+      description: "主修课程 / 描述",
+    },
+    work: {
+      company: "公司",
+      role: "职位",
+      start: "开始时间",
+      end: "结束时间",
+      description: "工作内容",
+    },
+    projects: {
+      name: "项目类型",
+      subtitle: "项目名称",
+      description: "项目内容",
+    },
+    skills: {
+      content: "技能内容",
+    },
   },
   sectionOrder: ["education", "work", "projects", "skills"],
   layout: {
@@ -96,6 +131,12 @@ function loadState() {
       ...parsed,
       basic: { ...base.basic, ...(parsed.basic || {}) },
       sectionTitles: { ...base.sectionTitles, ...(parsed.sectionTitles || {}) },
+      fieldLabels: Object.fromEntries(
+        Object.entries(base.fieldLabels).map(([key, labels]) => [
+          key,
+          { ...labels, ...(parsed.fieldLabels?.[key] || {}) },
+        ]),
+      ),
       layout: { ...base.layout, ...(parsed.layout || {}) },
       sectionOrder:
         Array.isArray(parsed.sectionOrder) && parsed.sectionOrder.length === base.sectionOrder.length
@@ -203,8 +244,12 @@ function sectionTitle(key) {
   return state.sectionTitles[key]?.trim() || originalResume.sectionTitles[key];
 }
 
+function fieldLabel(path) {
+  return getAtPath(state.fieldLabels, path)?.trim() || getAtPath(originalResume.fieldLabels, path);
+}
+
 function syncSectionTitleLabels() {
-  Object.keys(sectionPreviewIds).forEach((key) => {
+  Object.keys(originalResume.sectionTitles).forEach((key) => {
     document.querySelectorAll(`[data-section-label="${key}"]`).forEach((element) => {
       element.textContent = sectionTitle(key);
     });
@@ -214,6 +259,15 @@ function syncSectionTitleLabels() {
     document.querySelectorAll(`[data-sort-label="${key}"]`).forEach((element) => {
       element.textContent = sectionTitle(key);
     });
+    document.querySelectorAll(`[data-repeat-title="${key}"]`).forEach((element) => {
+      element.textContent = sectionTitle(key);
+    });
+  });
+}
+
+function syncFieldLabels() {
+  document.querySelectorAll("[data-field-label-display]").forEach((element) => {
+    element.textContent = fieldLabel(element.dataset.fieldLabelDisplay);
   });
 }
 
@@ -245,9 +299,34 @@ function bindCustomizationControls() {
     const key = input.dataset.titleKey;
     input.value = state.sectionTitles[key] ?? "";
     input.addEventListener("input", () => {
+      const previousTitle = sectionTitle(key);
+      const currentSkillsLabel = fieldLabel("skills.content");
       state.sectionTitles[key] = input.value;
+
+      if (
+        key === "skills" &&
+        (currentSkillsLabel === originalResume.fieldLabels.skills.content ||
+          currentSkillsLabel === `${previousTitle}内容`)
+      ) {
+        state.fieldLabels.skills.content = `${sectionTitle("skills")}内容`;
+        const skillsLabelInput = document.querySelector('[data-field-label-input="skills.content"]');
+        if (skillsLabelInput) skillsLabelInput.value = state.fieldLabels.skills.content;
+      }
+
       syncSectionTitleLabels();
+      syncFieldLabels();
       renderSectionOrderEditor();
+      renderPreview();
+      markSaving();
+    });
+  });
+
+  document.querySelectorAll("[data-field-label-input]").forEach((input) => {
+    const path = input.dataset.fieldLabelInput;
+    input.value = getAtPath(state.fieldLabels, path) ?? getAtPath(originalResume.fieldLabels, path);
+    input.addEventListener("input", () => {
+      setAtPath(state.fieldLabels, path, input.value);
+      syncFieldLabels();
       renderPreview();
       markSaving();
     });
@@ -389,10 +468,12 @@ function renderEditors() {
   renderRepeatEditor("education", "educationEditor", "educationItemTemplate");
   renderRepeatEditor("work", "workEditor", "workItemTemplate");
   renderRepeatEditor("projects", "projectEditor", "projectItemTemplate");
+  syncSectionTitleLabels();
+  syncFieldLabels();
 }
 
 function renderPreview() {
-  document.querySelector("#previewName").textContent = state.basic.name || "姓名";
+  document.querySelector("#previewName").textContent = state.basic.name || fieldLabel("basic.name");
 
   const contacts = [
     state.basic.gender,
@@ -409,8 +490,8 @@ function renderPreview() {
     .join('<span aria-hidden="true">|</span>');
 
   const targetParts = [];
-  if (state.basic.jobTarget) targetParts.push(`求职意向：${state.basic.jobTarget}`);
-  if (state.basic.salary) targetParts.push(`期望薪资：${state.basic.salary}`);
+  if (state.basic.jobTarget) targetParts.push(`${fieldLabel("basic.jobTarget")}：${state.basic.jobTarget}`);
+  if (state.basic.salary) targetParts.push(`${fieldLabel("basic.salary")}：${state.basic.salary}`);
   document.querySelector("#previewTarget").textContent = targetParts.join(" | ");
 
   const avatar = state.avatar || "./assets/avatar-placeholder.svg";
@@ -480,6 +561,7 @@ function renderPreview() {
   `;
 
   syncSectionTitleLabels();
+  syncFieldLabels();
   applySectionOrder();
   applyLayout();
   Object.keys(sectionPreviewIds).forEach((key) => {

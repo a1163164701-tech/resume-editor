@@ -413,6 +413,52 @@ button {
   line-height: 1.55;
 }
 
+.label-editor-groups {
+  display: grid;
+  gap: 9px;
+}
+
+.label-editor-group {
+  border: 1px solid #dfe7e3;
+  border-radius: 11px;
+  background: white;
+}
+
+.label-editor-group summary {
+  position: relative;
+  padding: 13px 42px 13px 14px;
+  color: #45514c;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  list-style: none;
+}
+
+.label-editor-group summary::-webkit-details-marker {
+  display: none;
+}
+
+.label-editor-group summary::after {
+  position: absolute;
+  top: 50%;
+  right: 15px;
+  content: "＋";
+  color: var(--accent);
+  transform: translateY(-50%);
+}
+
+.label-editor-group[open] summary {
+  border-bottom: 1px solid #e8eeeb;
+}
+
+.label-editor-group[open] summary::after {
+  content: "−";
+}
+
+.label-editor-group .field-grid {
+  padding: 14px;
+}
+
 .sort-list {
   display: grid;
   gap: 8px;

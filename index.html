@@ -38,7 +38,7 @@
         </div>
 
         <nav class="section-nav" aria-label="简历模块">
-          <button class="nav-chip active" data-target="basicSection" type="button">个人信息</button>
+          <button class="nav-chip active" data-target="basicSection" data-section-label="basic" type="button">个人信息</button>
           <button class="nav-chip" data-target="educationSection" data-section-label="education" type="button">教育经历</button>
           <button class="nav-chip" data-target="workSection" data-section-label="work" type="button">工作经历</button>
           <button class="nav-chip" data-target="projectSection" data-section-label="projects" type="button">项目经历</button>
@@ -51,12 +51,12 @@
             <div class="section-heading">
               <div>
                 <span class="section-number">01</span>
-                <h2>个人信息</h2>
+                <h2 data-editor-title="basic">个人信息</h2>
               </div>
             </div>
 
             <div class="photo-editor">
-              <img id="editorAvatar" src="./assets/avatar.png" alt="当前简历头像" />
+              <img id="editorAvatar" src="./assets/avatar-placeholder.svg" alt="当前简历头像" />
               <div>
                 <label class="upload-button" for="avatarInput">更换头像</label>
                 <input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" />
@@ -66,15 +66,15 @@
 
             <div class="field-grid">
               <label class="field">
-                <span>姓名</span>
+                <span data-field-label-display="basic.name">姓名</span>
                 <input data-path="basic.name" type="text" />
               </label>
               <label class="field">
-                <span>出生年月</span>
+                <span data-field-label-display="basic.birthDate">出生年月</span>
                 <input data-path="basic.birthDate" type="month" />
               </label>
               <label class="field">
-                <span>性别</span>
+                <span data-field-label-display="basic.gender">性别</span>
                 <select data-path="basic.gender">
                   <option value="">不展示</option>
                   <option value="男">男</option>
@@ -83,19 +83,19 @@
                 </select>
               </label>
               <label class="field">
-                <span>电话</span>
+                <span data-field-label-display="basic.phone">电话</span>
                 <input data-path="basic.phone" type="tel" />
               </label>
               <label class="field field-full">
-                <span>邮箱</span>
+                <span data-field-label-display="basic.email">邮箱</span>
                 <input data-path="basic.email" type="email" />
               </label>
               <label class="field">
-                <span>求职意向</span>
+                <span data-field-label-display="basic.jobTarget">求职意向</span>
                 <input data-path="basic.jobTarget" type="text" />
               </label>
               <label class="field">
-                <span>期望薪资</span>
+                <span data-field-label-display="basic.salary">期望薪资</span>
                 <input data-path="basic.salary" type="text" />
               </label>
             </div>
@@ -142,7 +142,7 @@
               </div>
             </div>
             <label class="field">
-              <span>技能内容</span>
+              <span data-field-label-display="skills.content">技能内容</span>
               <textarea data-path="skills" rows="12"></textarea>
               <small>每项单独一行；“名称：内容”会自动将名称加粗。</small>
             </label>
@@ -165,6 +165,10 @@
               </div>
               <div class="field-grid">
                 <label class="field">
+                  <span>个人信息模块</span>
+                  <input data-title-key="basic" type="text" />
+                </label>
+                <label class="field">
                   <span>教育模块</span>
                   <input data-title-key="education" type="text" />
                 </label>
@@ -180,6 +184,69 @@
                   <span>技能模块</span>
                   <input data-title-key="skills" type="text" />
                 </label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="settings-card-heading">
+                <div>
+                  <h3>自定义字段名称</h3>
+                  <p>姓名、学校、职位、技能内容等所有字段文字都可以修改。</p>
+                </div>
+              </div>
+
+              <div class="label-editor-groups">
+                <details class="label-editor-group">
+                  <summary>个人信息字段</summary>
+                  <div class="field-grid">
+                    <label class="field"><span>姓名字段</span><input data-field-label-input="basic.name" type="text" /></label>
+                    <label class="field"><span>出生年月字段</span><input data-field-label-input="basic.birthDate" type="text" /></label>
+                    <label class="field"><span>性别字段</span><input data-field-label-input="basic.gender" type="text" /></label>
+                    <label class="field"><span>电话字段</span><input data-field-label-input="basic.phone" type="text" /></label>
+                    <label class="field"><span>邮箱字段</span><input data-field-label-input="basic.email" type="text" /></label>
+                    <label class="field"><span>求职意向字段</span><input data-field-label-input="basic.jobTarget" type="text" /></label>
+                    <label class="field"><span>期望薪资字段</span><input data-field-label-input="basic.salary" type="text" /></label>
+                  </div>
+                </details>
+
+                <details class="label-editor-group">
+                  <summary>教育模块字段</summary>
+                  <div class="field-grid">
+                    <label class="field"><span>学校字段</span><input data-field-label-input="education.school" type="text" /></label>
+                    <label class="field"><span>学历字段</span><input data-field-label-input="education.degree" type="text" /></label>
+                    <label class="field"><span>专业字段</span><input data-field-label-input="education.major" type="text" /></label>
+                    <label class="field"><span>开始年份字段</span><input data-field-label-input="education.start" type="text" /></label>
+                    <label class="field"><span>结束年份字段</span><input data-field-label-input="education.end" type="text" /></label>
+                    <label class="field field-full"><span>描述字段</span><input data-field-label-input="education.description" type="text" /></label>
+                  </div>
+                </details>
+
+                <details class="label-editor-group">
+                  <summary>工作模块字段</summary>
+                  <div class="field-grid">
+                    <label class="field"><span>公司字段</span><input data-field-label-input="work.company" type="text" /></label>
+                    <label class="field"><span>职位字段</span><input data-field-label-input="work.role" type="text" /></label>
+                    <label class="field"><span>开始时间字段</span><input data-field-label-input="work.start" type="text" /></label>
+                    <label class="field"><span>结束时间字段</span><input data-field-label-input="work.end" type="text" /></label>
+                    <label class="field field-full"><span>内容字段</span><input data-field-label-input="work.description" type="text" /></label>
+                  </div>
+                </details>
+
+                <details class="label-editor-group">
+                  <summary>项目模块字段</summary>
+                  <div class="field-grid">
+                    <label class="field"><span>项目类型字段</span><input data-field-label-input="projects.name" type="text" /></label>
+                    <label class="field"><span>项目名称字段</span><input data-field-label-input="projects.subtitle" type="text" /></label>
+                    <label class="field field-full"><span>项目内容字段</span><input data-field-label-input="projects.description" type="text" /></label>
+                  </div>
+                </details>
+
+                <details class="label-editor-group" open>
+                  <summary>技能模块字段</summary>
+                  <div class="field-grid">
+                    <label class="field field-full"><span>内容字段</span><input data-field-label-input="skills.content" type="text" /></label>
+                  </div>
+                </details>
               </div>
             </div>
 
@@ -281,32 +348,32 @@
     <template id="educationItemTemplate">
       <article class="repeat-card">
         <div class="repeat-card-header">
-          <strong>教育经历</strong>
+          <strong data-repeat-title="education">教育经历</strong>
           <button class="remove-button" type="button">删除</button>
         </div>
         <div class="field-grid">
           <label class="field field-full">
-            <span>学校</span>
+            <span data-field-label-display="education.school">学校</span>
             <input data-key="school" type="text" />
           </label>
           <label class="field">
-            <span>学历</span>
+            <span data-field-label-display="education.degree">学历</span>
             <input data-key="degree" type="text" />
           </label>
           <label class="field">
-            <span>专业</span>
+            <span data-field-label-display="education.major">专业</span>
             <input data-key="major" type="text" />
           </label>
           <label class="field">
-            <span>开始年份</span>
+            <span data-field-label-display="education.start">开始年份</span>
             <input data-key="start" type="text" />
           </label>
           <label class="field">
-            <span>结束年份</span>
+            <span data-field-label-display="education.end">结束年份</span>
             <input data-key="end" type="text" />
           </label>
           <label class="field field-full">
-            <span>主修课程 / 描述</span>
+            <span data-field-label-display="education.description">主修课程 / 描述</span>
             <textarea data-key="description" rows="3"></textarea>
           </label>
         </div>
@@ -316,28 +383,28 @@
     <template id="workItemTemplate">
       <article class="repeat-card">
         <div class="repeat-card-header">
-          <strong>工作经历</strong>
+          <strong data-repeat-title="work">工作经历</strong>
           <button class="remove-button" type="button">删除</button>
         </div>
         <div class="field-grid">
           <label class="field field-full">
-            <span>公司</span>
+            <span data-field-label-display="work.company">公司</span>
             <input data-key="company" type="text" />
           </label>
           <label class="field">
-            <span>职位</span>
+            <span data-field-label-display="work.role">职位</span>
             <input data-key="role" type="text" />
           </label>
           <label class="field">
-            <span>开始时间</span>
+            <span data-field-label-display="work.start">开始时间</span>
             <input data-key="start" type="month" />
           </label>
           <label class="field">
-            <span>结束时间</span>
+            <span data-field-label-display="work.end">结束时间</span>
             <input data-key="end" type="month" />
           </label>
           <label class="field field-full">
-            <span>工作内容</span>
+            <span data-field-label-display="work.description">工作内容</span>
             <textarea data-key="description" rows="12"></textarea>
             <small>每项单独一行；“名称：内容”会自动将名称加粗。</small>
           </label>
@@ -348,20 +415,20 @@
     <template id="projectItemTemplate">
       <article class="repeat-card">
         <div class="repeat-card-header">
-          <strong>项目经历</strong>
+          <strong data-repeat-title="projects">项目经历</strong>
           <button class="remove-button" type="button">删除</button>
         </div>
         <div class="field-grid">
           <label class="field">
-            <span>项目类型</span>
+            <span data-field-label-display="projects.name">项目类型</span>
             <input data-key="name" type="text" />
           </label>
           <label class="field">
-            <span>项目名称</span>
+            <span data-field-label-display="projects.subtitle">项目名称</span>
             <input data-key="subtitle" type="text" />
           </label>
           <label class="field field-full">
-            <span>项目内容</span>
+            <span data-field-label-display="projects.description">项目内容</span>
             <textarea data-key="description" rows="12"></textarea>
             <small>每项单独一行；“名称：内容”会自动将名称加粗。</small>
           </label>
