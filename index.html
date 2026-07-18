@@ -1,0 +1,374 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>空白简历编辑器</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark">简</div>
+        <div>
+          <input id="resumeTitle" class="title-input" aria-label="简历名称" />
+          <div class="save-state">
+            <span id="saveDot" class="save-dot"></span>
+            <span id="saveStatus">空白模板</span>
+          </div>
+        </div>
+      </div>
+      <div class="topbar-actions">
+        <button id="resetButton" class="button button-secondary" type="button">清空全部内容</button>
+        <button id="printButton" class="button button-primary" type="button">
+          <span>导出 PDF</span>
+          <span aria-hidden="true">↗</span>
+        </button>
+      </div>
+    </header>
+
+    <main class="workspace">
+      <aside class="editor-panel">
+        <div class="editor-intro">
+          <div>
+            <p class="eyebrow">空白简历模板</p>
+            <h1>编辑简历内容</h1>
+          </div>
+          <span class="live-badge">实时预览</span>
+        </div>
+
+        <nav class="section-nav" aria-label="简历模块">
+          <button class="nav-chip active" data-target="basicSection" type="button">个人信息</button>
+          <button class="nav-chip" data-target="educationSection" data-section-label="education" type="button">教育经历</button>
+          <button class="nav-chip" data-target="workSection" data-section-label="work" type="button">工作经历</button>
+          <button class="nav-chip" data-target="projectSection" data-section-label="projects" type="button">项目经历</button>
+          <button class="nav-chip" data-target="skillsSection" data-section-label="skills" type="button">专业技能</button>
+          <button class="nav-chip nav-chip-layout" data-target="layoutSection" type="button">排版设置</button>
+        </nav>
+
+        <form id="resumeForm" autocomplete="off">
+          <section id="basicSection" class="form-section">
+            <div class="section-heading">
+              <div>
+                <span class="section-number">01</span>
+                <h2>个人信息</h2>
+              </div>
+            </div>
+
+            <div class="photo-editor">
+              <img id="editorAvatar" src="./assets/avatar.png" alt="当前简历头像" />
+              <div>
+                <label class="upload-button" for="avatarInput">更换头像</label>
+                <input id="avatarInput" type="file" accept="image/png,image/jpeg,image/webp" />
+                <p>支持 JPG、PNG、WebP。图片只保存在当前浏览器。</p>
+              </div>
+            </div>
+
+            <div class="field-grid">
+              <label class="field">
+                <span>姓名</span>
+                <input data-path="basic.name" type="text" />
+              </label>
+              <label class="field">
+                <span>出生年月</span>
+                <input data-path="basic.birthDate" type="month" />
+              </label>
+              <label class="field">
+                <span>性别</span>
+                <select data-path="basic.gender">
+                  <option value="">不展示</option>
+                  <option value="男">男</option>
+                  <option value="女">女</option>
+                  <option value="其他">其他</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>电话</span>
+                <input data-path="basic.phone" type="tel" />
+              </label>
+              <label class="field field-full">
+                <span>邮箱</span>
+                <input data-path="basic.email" type="email" />
+              </label>
+              <label class="field">
+                <span>求职意向</span>
+                <input data-path="basic.jobTarget" type="text" />
+              </label>
+              <label class="field">
+                <span>期望薪资</span>
+                <input data-path="basic.salary" type="text" />
+              </label>
+            </div>
+          </section>
+
+          <section id="educationSection" class="form-section">
+            <div class="section-heading">
+              <div>
+                <span class="section-number">02</span>
+                <h2 data-editor-title="education">教育经历</h2>
+              </div>
+              <button class="text-button" data-add="education" type="button">＋ 添加</button>
+            </div>
+            <div id="educationEditor" class="repeat-list"></div>
+          </section>
+
+          <section id="workSection" class="form-section">
+            <div class="section-heading">
+              <div>
+                <span class="section-number">03</span>
+                <h2 data-editor-title="work">工作经历</h2>
+              </div>
+              <button class="text-button" data-add="work" type="button">＋ 添加</button>
+            </div>
+            <div id="workEditor" class="repeat-list"></div>
+          </section>
+
+          <section id="projectSection" class="form-section">
+            <div class="section-heading">
+              <div>
+                <span class="section-number">04</span>
+                <h2 data-editor-title="projects">项目经历</h2>
+              </div>
+              <button class="text-button" data-add="projects" type="button">＋ 添加</button>
+            </div>
+            <div id="projectEditor" class="repeat-list"></div>
+          </section>
+
+          <section id="skillsSection" class="form-section">
+            <div class="section-heading">
+              <div>
+                <span class="section-number">05</span>
+                <h2 data-editor-title="skills">专业技能</h2>
+              </div>
+            </div>
+            <label class="field">
+              <span>技能内容</span>
+              <textarea data-path="skills" rows="12"></textarea>
+              <small>每项单独一行；“名称：内容”会自动将名称加粗。</small>
+            </label>
+          </section>
+
+          <section id="layoutSection" class="form-section layout-section">
+            <div class="section-heading">
+              <div>
+                <span class="section-number">06</span>
+                <h2>排版与模块管理</h2>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="settings-card-heading">
+                <div>
+                  <h3>自定义模块名称</h3>
+                  <p>修改后会立即更新左侧导航和右侧简历大标题。</p>
+                </div>
+              </div>
+              <div class="field-grid">
+                <label class="field">
+                  <span>教育模块</span>
+                  <input data-title-key="education" type="text" />
+                </label>
+                <label class="field">
+                  <span>工作模块</span>
+                  <input data-title-key="work" type="text" />
+                </label>
+                <label class="field">
+                  <span>项目模块</span>
+                  <input data-title-key="projects" type="text" />
+                </label>
+                <label class="field">
+                  <span>技能模块</span>
+                  <input data-title-key="skills" type="text" />
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <div class="settings-card-heading">
+                <div>
+                  <h3>模块顺序</h3>
+                  <p>按住左侧手柄拖动；也可以使用右侧箭头精确调整。</p>
+                </div>
+              </div>
+              <div id="sectionOrderEditor" class="sort-list"></div>
+            </div>
+
+            <div class="settings-card">
+              <div class="settings-card-heading">
+                <div>
+                  <h3>页面排版</h3>
+                  <p>控制正文、标题、间距和页边距，打印时保持相同效果。</p>
+                </div>
+                <button id="resetLayoutButton" class="text-button" type="button">恢复标准排版</button>
+              </div>
+
+              <div class="layout-controls">
+                <label class="range-field">
+                  <span><strong>正文字号</strong><output data-output-for="fontSize"></output></span>
+                  <input data-layout-key="fontSize" type="range" min="8.2" max="11.5" step="0.1" />
+                </label>
+                <label class="range-field">
+                  <span><strong>正文行距</strong><output data-output-for="lineHeight"></output></span>
+                  <input data-layout-key="lineHeight" type="range" min="1.25" max="1.8" step="0.01" />
+                </label>
+                <label class="range-field">
+                  <span><strong>模块间距</strong><output data-output-for="sectionGap"></output></span>
+                  <input data-layout-key="sectionGap" type="range" min="1" max="8" step="0.5" />
+                </label>
+                <label class="range-field">
+                  <span><strong>大标题字号</strong><output data-output-for="headingSize"></output></span>
+                  <input data-layout-key="headingSize" type="range" min="13" max="21" step="0.5" />
+                </label>
+                <label class="range-field">
+                  <span><strong>页面边距</strong><output data-output-for="pageMargin"></output></span>
+                  <input data-layout-key="pageMargin" type="range" min="6" max="20" step="0.5" />
+                </label>
+                <label class="color-field">
+                  <span>
+                    <strong>大标题颜色</strong>
+                    <small>点击色块选择</small>
+                  </span>
+                  <input data-layout-key="headingColor" type="color" />
+                </label>
+              </div>
+            </div>
+          </section>
+        </form>
+      </aside>
+
+      <section class="preview-panel" aria-label="简历实时预览">
+        <div class="preview-toolbar">
+          <div class="preview-heading">
+            <div class="preview-heading-icon" aria-hidden="true">预</div>
+            <div>
+              <p class="eyebrow">简历页面</p>
+              <h2>实时预览</h2>
+              <p>所有修改会立即显示，并自动保存在浏览器中</p>
+            </div>
+          </div>
+          <div class="preview-toolbar-actions">
+            <span class="page-badge">A4</span>
+            <div class="zoom-control">
+              <button id="zoomOut" type="button" aria-label="缩小">−</button>
+              <span id="zoomLabel">90%</span>
+              <button id="zoomIn" type="button" aria-label="放大">＋</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="paperStage" class="paper-stage">
+          <article id="resumePaper" class="resume-paper">
+            <section class="resume-header">
+              <div class="resume-identity">
+                <h1 id="previewName"></h1>
+                <div id="previewContacts" class="contact-row"></div>
+                <p id="previewTarget" class="target-row"></p>
+              </div>
+              <img id="previewAvatar" class="resume-avatar" alt="简历头像" />
+            </section>
+
+            <div id="previewSections">
+              <section id="previewEducation" class="resume-section" data-preview-section="education"></section>
+              <section id="previewWork" class="resume-section" data-preview-section="work"></section>
+              <section id="previewProjects" class="resume-section" data-preview-section="projects"></section>
+              <section id="previewSkills" class="resume-section" data-preview-section="skills"></section>
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <template id="educationItemTemplate">
+      <article class="repeat-card">
+        <div class="repeat-card-header">
+          <strong>教育经历</strong>
+          <button class="remove-button" type="button">删除</button>
+        </div>
+        <div class="field-grid">
+          <label class="field field-full">
+            <span>学校</span>
+            <input data-key="school" type="text" />
+          </label>
+          <label class="field">
+            <span>学历</span>
+            <input data-key="degree" type="text" />
+          </label>
+          <label class="field">
+            <span>专业</span>
+            <input data-key="major" type="text" />
+          </label>
+          <label class="field">
+            <span>开始年份</span>
+            <input data-key="start" type="text" />
+          </label>
+          <label class="field">
+            <span>结束年份</span>
+            <input data-key="end" type="text" />
+          </label>
+          <label class="field field-full">
+            <span>主修课程 / 描述</span>
+            <textarea data-key="description" rows="3"></textarea>
+          </label>
+        </div>
+      </article>
+    </template>
+
+    <template id="workItemTemplate">
+      <article class="repeat-card">
+        <div class="repeat-card-header">
+          <strong>工作经历</strong>
+          <button class="remove-button" type="button">删除</button>
+        </div>
+        <div class="field-grid">
+          <label class="field field-full">
+            <span>公司</span>
+            <input data-key="company" type="text" />
+          </label>
+          <label class="field">
+            <span>职位</span>
+            <input data-key="role" type="text" />
+          </label>
+          <label class="field">
+            <span>开始时间</span>
+            <input data-key="start" type="month" />
+          </label>
+          <label class="field">
+            <span>结束时间</span>
+            <input data-key="end" type="month" />
+          </label>
+          <label class="field field-full">
+            <span>工作内容</span>
+            <textarea data-key="description" rows="12"></textarea>
+            <small>每项单独一行；“名称：内容”会自动将名称加粗。</small>
+          </label>
+        </div>
+      </article>
+    </template>
+
+    <template id="projectItemTemplate">
+      <article class="repeat-card">
+        <div class="repeat-card-header">
+          <strong>项目经历</strong>
+          <button class="remove-button" type="button">删除</button>
+        </div>
+        <div class="field-grid">
+          <label class="field">
+            <span>项目类型</span>
+            <input data-key="name" type="text" />
+          </label>
+          <label class="field">
+            <span>项目名称</span>
+            <input data-key="subtitle" type="text" />
+          </label>
+          <label class="field field-full">
+            <span>项目内容</span>
+            <textarea data-key="description" rows="12"></textarea>
+            <small>每项单独一行；“名称：内容”会自动将名称加粗。</small>
+          </label>
+        </div>
+      </article>
+    </template>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

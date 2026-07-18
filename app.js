@@ -1,0 +1,577 @@
+const STORAGE_KEY = "resume-editor-blank-template-v2";
+
+const originalResume = {
+  title: "我的简历",
+  avatar: "./assets/avatar-placeholder.svg",
+  sectionTitles: {
+    education: "教育经历",
+    work: "工作经历",
+    projects: "项目经历",
+    skills: "专业技能",
+  },
+  sectionOrder: ["education", "work", "projects", "skills"],
+  layout: {
+    fontSize: 9.4,
+    lineHeight: 1.48,
+    sectionGap: 3.5,
+    headingSize: 15.5,
+    pageMargin: 9,
+    headingColor: "#111111",
+  },
+  basic: {
+    name: "",
+    birthDate: "",
+    gender: "",
+    phone: "",
+    email: "",
+    jobTarget: "",
+    salary: "",
+  },
+  education: [
+    {
+      school: "",
+      degree: "",
+      major: "",
+      start: "",
+      end: "",
+      description: "",
+    },
+  ],
+  work: [
+    {
+      company: "",
+      role: "",
+      start: "",
+      end: "",
+      description: "",
+    },
+  ],
+  projects: [
+    {
+      name: "",
+      subtitle: "",
+      description: "",
+    },
+  ],
+  skills: "",
+};
+
+let state = loadState();
+let saveTimer = null;
+let zoom = 0.9;
+let draggedSectionKey = null;
+
+const sectionPreviewIds = {
+  education: "previewEducation",
+  work: "previewWork",
+  projects: "previewProjects",
+  skills: "previewSkills",
+};
+
+const layoutUnits = {
+  fontSize: "pt",
+  lineHeight: "",
+  sectionGap: "mm",
+  headingSize: "pt",
+  pageMargin: "mm",
+};
+
+const form = document.querySelector("#resumeForm");
+const resumeTitle = document.querySelector("#resumeTitle");
+const saveStatus = document.querySelector("#saveStatus");
+const saveState = document.querySelector(".save-state");
+
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function loadState() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if (!saved) return clone(originalResume);
+    const parsed = JSON.parse(saved);
+    const base = clone(originalResume);
+    return {
+      ...base,
+      ...parsed,
+      basic: { ...base.basic, ...(parsed.basic || {}) },
+      sectionTitles: { ...base.sectionTitles, ...(parsed.sectionTitles || {}) },
+      layout: { ...base.layout, ...(parsed.layout || {}) },
+      sectionOrder:
+        Array.isArray(parsed.sectionOrder) && parsed.sectionOrder.length === base.sectionOrder.length
+          ? parsed.sectionOrder.filter((key) => base.sectionOrder.includes(key))
+          : base.sectionOrder,
+    };
+  } catch {
+    return clone(originalResume);
+  }
+}
+
+function getAtPath(object, path) {
+  return path.split(".").reduce((value, key) => value?.[key], object);
+}
+
+function setAtPath(object, path, value) {
+  const parts = path.split(".");
+  const last = parts.pop();
+  const target = parts.reduce((value, key) => value[key], object);
+  target[last] = value;
+}
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function hasAnyValue(item) {
+  return Object.values(item).some((value) => String(value || "").trim());
+}
+
+function sectionHasContent(key) {
+  if (key === "skills") return Boolean(String(state.skills || "").trim());
+  return state[key].some(hasAnyValue);
+}
+
+function resumeHasAnyContent() {
+  const hasBasicContent = Object.values(state.basic).some((value) => String(value || "").trim());
+  const hasSectionContent = ["education", "work", "projects"].some((key) => state[key].some(hasAnyValue));
+  const hasSkills = Boolean(String(state.skills || "").trim());
+  const hasAvatar = Boolean(state.avatar && state.avatar !== "./assets/avatar-placeholder.svg");
+  return hasBasicContent || hasSectionContent || hasSkills || hasAvatar;
+}
+
+function renderLabeledLines(text) {
+  return String(text || "")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const match = line.match(/^([^：:]{1,36}[：:])\s*(.*)$/);
+      if (!match) return `<p class="labeled-line">${escapeHtml(line)}</p>`;
+      return `<p class="labeled-line"><strong>${escapeHtml(match[1])}</strong> ${escapeHtml(match[2])}</p>`;
+    })
+    .join("");
+}
+
+function calculateAge(value) {
+  if (!value) return "";
+  const [year, month] = value.split("-").map(Number);
+  if (!year) return "";
+  const today = new Date();
+  let age = today.getFullYear() - year;
+  if ((month || 1) > today.getMonth() + 1) age -= 1;
+  return age > 0 ? `${age}岁` : "";
+}
+
+function formatMonth(value) {
+  return value ? value.replace("-", ".") : "";
+}
+
+function markSaving() {
+  saveState.classList.add("saving");
+  saveStatus.textContent = "正在保存…";
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    saveState.classList.remove("saving");
+    saveStatus.textContent = "草稿已保存";
+  }, 550);
+}
+
+function bindStaticFields() {
+  resumeTitle.value = state.title;
+  resumeTitle.addEventListener("input", () => {
+    state.title = resumeTitle.value;
+    markSaving();
+  });
+
+  form.querySelectorAll("[data-path]").forEach((input) => {
+    input.value = getAtPath(state, input.dataset.path) ?? "";
+    input.addEventListener("input", () => {
+      setAtPath(state, input.dataset.path, input.value);
+      renderPreview();
+      markSaving();
+    });
+  });
+}
+
+function sectionTitle(key) {
+  return state.sectionTitles[key]?.trim() || originalResume.sectionTitles[key];
+}
+
+function syncSectionTitleLabels() {
+  Object.keys(sectionPreviewIds).forEach((key) => {
+    document.querySelectorAll(`[data-section-label="${key}"]`).forEach((element) => {
+      element.textContent = sectionTitle(key);
+    });
+    document.querySelectorAll(`[data-editor-title="${key}"]`).forEach((element) => {
+      element.textContent = sectionTitle(key);
+    });
+    document.querySelectorAll(`[data-sort-label="${key}"]`).forEach((element) => {
+      element.textContent = sectionTitle(key);
+    });
+  });
+}
+
+function formatLayoutValue(key, value) {
+  if (key === "lineHeight") return `${Number(value).toFixed(2)}×`;
+  const number = Number(value);
+  const formatted = Number.isInteger(number) ? number.toFixed(0) : number.toFixed(1);
+  return `${formatted}${layoutUnits[key] || ""}`;
+}
+
+function applyLayout() {
+  const paper = document.querySelector("#resumePaper");
+  paper.style.setProperty("--resume-font-size", `${state.layout.fontSize}pt`);
+  paper.style.setProperty("--resume-line-height", state.layout.lineHeight);
+  paper.style.setProperty("--resume-section-gap", `${state.layout.sectionGap}mm`);
+  paper.style.setProperty("--resume-heading-size", `${state.layout.headingSize}pt`);
+  paper.style.setProperty("--resume-page-margin", `${state.layout.pageMargin}mm`);
+  paper.style.setProperty("--resume-heading-color", state.layout.headingColor);
+
+  document.querySelectorAll("[data-output-for]").forEach((output) => {
+    const key = output.dataset.outputFor;
+    output.value = formatLayoutValue(key, state.layout[key]);
+    output.textContent = formatLayoutValue(key, state.layout[key]);
+  });
+}
+
+function bindCustomizationControls() {
+  document.querySelectorAll("[data-title-key]").forEach((input) => {
+    const key = input.dataset.titleKey;
+    input.value = state.sectionTitles[key] ?? "";
+    input.addEventListener("input", () => {
+      state.sectionTitles[key] = input.value;
+      syncSectionTitleLabels();
+      renderSectionOrderEditor();
+      renderPreview();
+      markSaving();
+    });
+  });
+
+  document.querySelectorAll("[data-layout-key]").forEach((input) => {
+    const key = input.dataset.layoutKey;
+    input.value = state.layout[key];
+    input.addEventListener("input", () => {
+      state.layout[key] = input.type === "color" ? input.value : Number(input.value);
+      applyLayout();
+      markSaving();
+    });
+  });
+
+  document.querySelector("#resetLayoutButton").addEventListener("click", () => {
+    state.layout = clone(originalResume.layout);
+    document.querySelectorAll("[data-layout-key]").forEach((input) => {
+      input.value = state.layout[input.dataset.layoutKey];
+    });
+    applyLayout();
+    markSaving();
+  });
+}
+
+function applySectionOrder() {
+  const previewSections = document.querySelector("#previewSections");
+  state.sectionOrder.forEach((key) => {
+    const element = document.querySelector(`#${sectionPreviewIds[key]}`);
+    if (element) previewSections.appendChild(element);
+  });
+}
+
+function moveSection(key, direction) {
+  const currentIndex = state.sectionOrder.indexOf(key);
+  const nextIndex = currentIndex + direction;
+  if (currentIndex < 0 || nextIndex < 0 || nextIndex >= state.sectionOrder.length) return;
+  const nextOrder = [...state.sectionOrder];
+  [nextOrder[currentIndex], nextOrder[nextIndex]] = [nextOrder[nextIndex], nextOrder[currentIndex]];
+  state.sectionOrder = nextOrder;
+  applySectionOrder();
+  renderSectionOrderEditor();
+  markSaving();
+}
+
+function reorderSection(draggedKey, targetKey) {
+  if (!draggedKey || draggedKey === targetKey) return;
+  const nextOrder = [...state.sectionOrder];
+  const fromIndex = nextOrder.indexOf(draggedKey);
+  const targetIndex = nextOrder.indexOf(targetKey);
+  if (fromIndex < 0 || targetIndex < 0) return;
+  nextOrder.splice(fromIndex, 1);
+  nextOrder.splice(targetIndex, 0, draggedKey);
+  state.sectionOrder = nextOrder;
+  applySectionOrder();
+  renderSectionOrderEditor();
+  markSaving();
+}
+
+function renderSectionOrderEditor() {
+  const container = document.querySelector("#sectionOrderEditor");
+  container.innerHTML = state.sectionOrder
+    .map(
+      (key, index) => `
+        <div class="sort-item" draggable="true" data-sort-key="${key}">
+          <span class="drag-handle" aria-hidden="true">⋮⋮</span>
+          <span class="sort-label" data-sort-label="${key}">${escapeHtml(sectionTitle(key))}</span>
+          <span class="sort-actions">
+            <button data-move-up="${key}" type="button" aria-label="上移${escapeHtml(sectionTitle(key))}" ${index === 0 ? "disabled" : ""}>↑</button>
+            <button data-move-down="${key}" type="button" aria-label="下移${escapeHtml(sectionTitle(key))}" ${index === state.sectionOrder.length - 1 ? "disabled" : ""}>↓</button>
+          </span>
+        </div>`,
+    )
+    .join("");
+
+  container.querySelectorAll("[data-move-up]").forEach((button) => {
+    button.addEventListener("click", () => moveSection(button.dataset.moveUp, -1));
+  });
+  container.querySelectorAll("[data-move-down]").forEach((button) => {
+    button.addEventListener("click", () => moveSection(button.dataset.moveDown, 1));
+  });
+
+  container.querySelectorAll(".sort-item").forEach((item) => {
+    item.addEventListener("dragstart", (event) => {
+      draggedSectionKey = item.dataset.sortKey;
+      item.classList.add("dragging");
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", draggedSectionKey);
+    });
+    item.addEventListener("dragover", (event) => {
+      if (!draggedSectionKey || draggedSectionKey === item.dataset.sortKey) return;
+      event.preventDefault();
+      item.classList.add("drag-over");
+      event.dataTransfer.dropEffect = "move";
+    });
+    item.addEventListener("dragleave", () => item.classList.remove("drag-over"));
+    item.addEventListener("drop", (event) => {
+      event.preventDefault();
+      item.classList.remove("drag-over");
+      reorderSection(draggedSectionKey, item.dataset.sortKey);
+    });
+    item.addEventListener("dragend", () => {
+      draggedSectionKey = null;
+      container.querySelectorAll(".sort-item").forEach((row) => {
+        row.classList.remove("dragging", "drag-over");
+      });
+    });
+  });
+}
+
+function renderRepeatEditor(type, containerId, templateId) {
+  const container = document.querySelector(`#${containerId}`);
+  const template = document.querySelector(`#${templateId}`);
+  container.replaceChildren();
+
+  state[type].forEach((item, index) => {
+    const fragment = template.content.cloneNode(true);
+    const card = fragment.querySelector(".repeat-card");
+    card.querySelectorAll("[data-key]").forEach((input) => {
+      input.value = item[input.dataset.key] ?? "";
+      input.addEventListener("input", () => {
+        state[type][index][input.dataset.key] = input.value;
+        renderPreview();
+        markSaving();
+      });
+    });
+    card.querySelector(".remove-button").addEventListener("click", () => {
+      if (state[type].length === 1) return;
+      state[type].splice(index, 1);
+      renderEditors();
+      renderPreview();
+      markSaving();
+    });
+    container.appendChild(fragment);
+  });
+}
+
+function renderEditors() {
+  renderRepeatEditor("education", "educationEditor", "educationItemTemplate");
+  renderRepeatEditor("work", "workEditor", "workItemTemplate");
+  renderRepeatEditor("projects", "projectEditor", "projectItemTemplate");
+}
+
+function renderPreview() {
+  document.querySelector("#previewName").textContent = state.basic.name || "姓名";
+
+  const contacts = [
+    state.basic.gender,
+    calculateAge(state.basic.birthDate),
+    state.basic.phone,
+    state.basic.email,
+  ].filter(Boolean);
+
+  document.querySelector("#previewContacts").innerHTML = contacts
+    .map((item, index) => {
+      const icon = index === contacts.length - 2 ? "☎" : index === contacts.length - 1 ? "✉" : "";
+      return `<span class="contact-item">${icon ? `<span class="contact-icon">${icon}</span>` : ""}${escapeHtml(item)}</span>`;
+    })
+    .join('<span aria-hidden="true">|</span>');
+
+  const targetParts = [];
+  if (state.basic.jobTarget) targetParts.push(`求职意向：${state.basic.jobTarget}`);
+  if (state.basic.salary) targetParts.push(`期望薪资：${state.basic.salary}`);
+  document.querySelector("#previewTarget").textContent = targetParts.join(" | ");
+
+  const avatar = state.avatar || "./assets/avatar-placeholder.svg";
+  const previewAvatar = document.querySelector("#previewAvatar");
+  const hasCustomAvatar = Boolean(state.avatar && state.avatar !== "./assets/avatar-placeholder.svg");
+  previewAvatar.src = avatar;
+  previewAvatar.hidden = !hasCustomAvatar;
+  document.querySelector("#editorAvatar").src = avatar;
+
+  document.querySelector("#previewEducation").innerHTML = `
+    <h2 class="resume-section-title">${escapeHtml(sectionTitle("education"))}</h2>
+    ${state.education
+      .filter(hasAnyValue)
+      .map(
+        (item) => `
+          <article class="resume-entry">
+            <div class="entry-header">
+              <strong>${escapeHtml(item.school)}</strong>
+              <span class="entry-meta">${escapeHtml([item.degree, item.major].filter(Boolean).join("　　"))}</span>
+              <span class="entry-date">${escapeHtml([item.start, item.end].filter(Boolean).join("-"))}</span>
+            </div>
+            <p class="entry-description">${escapeHtml(item.description)}</p>
+          </article>`,
+      )
+      .join("")}
+  `;
+
+  document.querySelector("#previewWork").innerHTML = `
+    <h2 class="resume-section-title">${escapeHtml(sectionTitle("work"))}</h2>
+    ${state.work
+      .filter(hasAnyValue)
+      .map(
+        (item) => `
+          <article class="resume-entry">
+            <div class="entry-header">
+              <strong>${escapeHtml(item.company)}</strong>
+              <span class="entry-meta">${escapeHtml(item.role)}</span>
+              <span class="entry-date">${escapeHtml([formatMonth(item.start), formatMonth(item.end)].filter(Boolean).join("-"))}</span>
+            </div>
+            <div class="labeled-lines">${renderLabeledLines(item.description)}</div>
+          </article>`,
+      )
+      .join("")}
+  `;
+
+  document.querySelector("#previewProjects").innerHTML = `
+    <h2 class="resume-section-title">${escapeHtml(sectionTitle("projects"))}</h2>
+    ${state.projects
+      .filter(hasAnyValue)
+      .map(
+        (item) => `
+          <article class="resume-entry">
+            <div class="entry-header">
+              <strong>${escapeHtml(item.name)}</strong>
+              <span class="entry-meta">${escapeHtml(item.subtitle)}</span>
+              <span></span>
+            </div>
+            <div class="labeled-lines">${renderLabeledLines(item.description)}</div>
+          </article>`,
+      )
+      .join("")}
+  `;
+
+  document.querySelector("#previewSkills").innerHTML = `
+    <h2 class="resume-section-title">${escapeHtml(sectionTitle("skills"))}</h2>
+    <div class="skills-block labeled-lines">${renderLabeledLines(state.skills)}</div>
+  `;
+
+  syncSectionTitleLabels();
+  applySectionOrder();
+  applyLayout();
+  Object.keys(sectionPreviewIds).forEach((key) => {
+    document.querySelector(`#${sectionPreviewIds[key]}`).classList.toggle("is-empty", !sectionHasContent(key));
+  });
+  document.querySelector("#resumePaper").classList.toggle("is-blank-resume", !resumeHasAnyContent());
+}
+
+function addItem(type) {
+  const emptyItems = {
+    education: {
+      school: "",
+      degree: "",
+      major: "",
+      start: "",
+      end: "",
+      description: "",
+    },
+    work: {
+      company: "",
+      role: "",
+      start: "",
+      end: "",
+      description: "",
+    },
+    projects: {
+      name: "",
+      subtitle: "",
+      description: "",
+    },
+  };
+  state[type].push(clone(emptyItems[type]));
+  renderEditors();
+  renderPreview();
+  markSaving();
+}
+
+document.querySelectorAll("[data-add]").forEach((button) => {
+  button.addEventListener("click", () => addItem(button.dataset.add));
+});
+
+document.querySelector("#avatarInput").addEventListener("change", (event) => {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.addEventListener("load", () => {
+    state.avatar = reader.result;
+    renderPreview();
+    markSaving();
+  });
+  reader.readAsDataURL(file);
+});
+
+document.querySelector("#printButton").addEventListener("click", () => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  window.print();
+});
+
+document.querySelector("#resetButton").addEventListener("click", () => {
+  if (!window.confirm("确定清空全部内容吗？当前填写的数据会被覆盖。")) return;
+  state = clone(originalResume);
+  localStorage.removeItem(STORAGE_KEY);
+  bindAndRenderAll();
+  saveStatus.textContent = "内容已清空";
+});
+
+document.querySelectorAll(".nav-chip").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.querySelectorAll(".nav-chip").forEach((item) => item.classList.remove("active"));
+    button.classList.add("active");
+    document.querySelector(`#${button.dataset.target}`).scrollIntoView({ behavior: "smooth" });
+  });
+});
+
+function setZoom(next) {
+  zoom = Math.min(1.05, Math.max(0.6, next));
+  document.querySelector("#resumePaper").style.transform = `scale(${zoom})`;
+  document.querySelector("#zoomLabel").textContent = `${Math.round(zoom * 100)}%`;
+}
+
+document.querySelector("#zoomOut").addEventListener("click", () => setZoom(zoom - 0.05));
+document.querySelector("#zoomIn").addEventListener("click", () => setZoom(zoom + 0.05));
+
+function bindAndRenderAll() {
+  const cleanForm = form.cloneNode(true);
+  form.replaceWith(cleanForm);
+  window.location.reload();
+}
+
+bindStaticFields();
+bindCustomizationControls();
+renderEditors();
+renderSectionOrderEditor();
+renderPreview();
+setZoom(zoom);

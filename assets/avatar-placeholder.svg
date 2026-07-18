@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="240" height="240" viewBox="0 0 240 240" role="img" aria-labelledby="title description">
+  <title id="title">头像占位图</title>
+  <desc id="description">用于空白简历模板的中性头像占位图</desc>
+  <rect width="240" height="240" rx="28" fill="#eef3f0"/>
+  <circle cx="120" cy="88" r="42" fill="#bcc9c3"/>
+  <path d="M48 218c4-53 32-83 72-83s68 30 72 83" fill="#bcc9c3"/>
+  <circle cx="120" cy="120" r="104" fill="none" stroke="#d8e1dd" stroke-width="4"/>
+</svg>
