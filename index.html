@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>空白简历编辑器</title>
+    <link rel="icon" href="./assets/avatar-placeholder.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -19,6 +20,16 @@
         </div>
       </div>
       <div class="topbar-actions">
+        <button id="importResumeButton" class="button button-secondary" type="button">
+          <span aria-hidden="true">↑</span>
+          <span>导入简历</span>
+        </button>
+        <input
+          id="resumeImportInput"
+          type="file"
+          accept=".pdf,.docx,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain,text/markdown"
+          hidden
+        />
         <button id="resetButton" class="button button-secondary" type="button">清空全部内容</button>
         <button id="printButton" class="button button-primary" type="button">
           <span>导出 PDF</span>
@@ -345,6 +356,86 @@
       </section>
     </main>
 
+    <dialog id="importDialog" class="import-dialog" aria-labelledby="importDialogTitle">
+      <div class="import-dialog-shell">
+        <header class="import-dialog-header">
+          <div>
+            <p class="eyebrow">本地自动识别</p>
+            <h2 id="importDialogTitle">导入已有简历</h2>
+            <p>文件只在当前浏览器中解析，不会上传到服务器。</p>
+          </div>
+          <button id="closeImportDialog" class="dialog-close" type="button" aria-label="关闭">×</button>
+        </header>
+
+        <div class="import-dialog-body">
+          <div id="importStatus" class="import-status" role="status" aria-live="polite">
+            <span class="import-spinner" aria-hidden="true"></span>
+            <div>
+              <strong>正在读取简历…</strong>
+              <p>PDF 和 Word 文件可能需要几秒钟。</p>
+              <button id="retryImportFile" class="text-button" type="button" hidden>选择其他文件</button>
+            </div>
+          </div>
+
+          <div id="importResults" class="import-results" hidden>
+            <div class="import-file-row">
+              <div>
+                <span class="import-file-icon" aria-hidden="true">文</span>
+                <span>
+                  <strong id="importFileName">简历文件</strong>
+                  <small id="importFileMeta"></small>
+                </span>
+              </div>
+              <button id="chooseAnotherResume" class="text-button" type="button">重新选择</button>
+            </div>
+
+            <section class="recognition-summary" aria-labelledby="recognitionSummaryTitle">
+              <div class="recognition-summary-heading">
+                <div>
+                  <h3 id="recognitionSummaryTitle">识别结果</h3>
+                  <p>导入前可以检查文字；如有错误，可直接修改后重新识别。</p>
+                </div>
+                <span id="recognitionQuality" class="recognition-quality">已完成</span>
+              </div>
+              <div id="recognitionStats" class="recognition-stats"></div>
+            </section>
+
+            <label class="field import-text-field">
+              <span>识别出的简历文字</span>
+              <textarea id="importExtractedText" rows="12" spellcheck="false"></textarea>
+              <small>支持识别常见的个人信息、教育经历、工作经历、项目经历和专业技能标题。</small>
+            </label>
+
+            <fieldset class="import-mode">
+              <legend>导入方式</legend>
+              <label>
+                <input type="radio" name="importMode" value="replace" checked />
+                <span>
+                  <strong>替换当前简历内容</strong>
+                  <small>保留头像、排版和自定义字段名称。</small>
+                </span>
+              </label>
+              <label>
+                <input type="radio" name="importMode" value="merge" />
+                <span>
+                  <strong>与当前内容合并</strong>
+                  <small>补充空白个人信息，并追加识别出的经历。</small>
+                </span>
+              </label>
+            </fieldset>
+          </div>
+        </div>
+
+        <footer class="import-dialog-footer">
+          <button id="cancelImport" class="button button-light" type="button">取消</button>
+          <div>
+            <button id="rerunRecognition" class="button button-light" type="button" hidden>重新识别</button>
+            <button id="applyImport" class="button button-primary" type="button" disabled>导入到编辑器</button>
+          </div>
+        </footer>
+      </div>
+    </dialog>
+
     <template id="educationItemTemplate">
       <article class="repeat-card">
         <div class="repeat-card-header">
@@ -436,6 +527,7 @@
       </article>
     </template>
 
+    <script src="./resume-import.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

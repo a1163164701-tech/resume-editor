@@ -115,6 +115,15 @@ const form = document.querySelector("#resumeForm");
 const resumeTitle = document.querySelector("#resumeTitle");
 const saveStatus = document.querySelector("#saveStatus");
 const saveState = document.querySelector(".save-state");
+const importDialog = document.querySelector("#importDialog");
+const resumeImportInput = document.querySelector("#resumeImportInput");
+const importStatus = document.querySelector("#importStatus");
+const importResults = document.querySelector("#importResults");
+const importExtractedText = document.querySelector("#importExtractedText");
+const applyImportButton = document.querySelector("#applyImport");
+const rerunRecognitionButton = document.querySelector("#rerunRecognition");
+let currentImportRecognition = null;
+let currentImportFile = null;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -599,8 +608,201 @@ function addItem(type) {
   markSaving();
 }
 
+function formatFileSize(bytes) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function setImportStatus(title, description, isError = false) {
+  importStatus.hidden = false;
+  importResults.hidden = true;
+  importStatus.classList.toggle("is-error", isError);
+  importStatus.querySelector("strong").textContent = title;
+  importStatus.querySelector("p").textContent = description;
+  document.querySelector("#retryImportFile").hidden = !isError;
+  applyImportButton.disabled = true;
+  rerunRecognitionButton.hidden = true;
+}
+
+function renderRecognitionSummary(recognition) {
+  const { summary } = recognition;
+  const stats = [
+    ["个人信息", summary.basicFields],
+    ["教育经历", summary.educationEntries],
+    ["工作经历", summary.workEntries],
+    ["项目经历", summary.projectEntries],
+    ["技能条目", summary.skillLines],
+  ];
+  document.querySelector("#recognitionStats").innerHTML = stats
+    .map(
+      ([label, value]) => `
+        <div class="recognition-stat">
+          <strong>${Number(value) || 0}</strong>
+          <span>${label}</span>
+        </div>`,
+    )
+    .join("");
+
+  const recognitionScore =
+    summary.basicFields +
+    summary.educationEntries * 2 +
+    summary.workEntries * 2 +
+    summary.projectEntries +
+    Math.min(summary.skillLines, 3);
+  const quality = document.querySelector("#recognitionQuality");
+  quality.textContent = recognitionScore >= 7 ? "识别较完整" : "建议检查";
+}
+
+function showImportRecognition(file, text, recognition) {
+  currentImportFile = file;
+  currentImportRecognition = recognition;
+  importStatus.hidden = true;
+  importResults.hidden = false;
+  importExtractedText.value = text;
+  document.querySelector("#importFileName").textContent = file?.name || "粘贴的简历文字";
+  document.querySelector("#importFileMeta").textContent = [
+    file?.name?.split(".").pop()?.toUpperCase(),
+    file ? formatFileSize(file.size) : "",
+    `${text.length} 个字符`,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  renderRecognitionSummary(recognition);
+  applyImportButton.disabled = false;
+  rerunRecognitionButton.hidden = false;
+}
+
+async function processImportFile(file) {
+  if (!file) return;
+  if (!importDialog.open) importDialog.showModal();
+  setImportStatus("正在读取简历…", "文件只在当前浏览器中解析，请稍候。");
+  currentImportFile = file;
+  currentImportRecognition = null;
+
+  try {
+    const text = await window.ResumeImporter.extractText(file);
+    const recognition = window.ResumeImporter.recognizeResumeText(text);
+    showImportRecognition(file, text, recognition);
+  } catch (error) {
+    setImportStatus(
+      "未能识别这份简历",
+      error?.message || "请换用可复制文字的 PDF、DOCX、TXT 或 Markdown 文件。",
+      true,
+    );
+  } finally {
+    resumeImportInput.value = "";
+  }
+}
+
+function entriesForImport(items, emptyTemplate) {
+  const populated = (items || []).filter(hasAnyValue).map(clone);
+  return populated.length ? populated : [clone(emptyTemplate)];
+}
+
+function mergeImportedEntries(currentItems, importedItems, emptyTemplate) {
+  const existing = (currentItems || []).filter(hasAnyValue).map(clone);
+  const imported = (importedItems || []).filter(hasAnyValue).map(clone);
+  const merged = [...existing, ...imported];
+  return merged.length ? merged : [clone(emptyTemplate)];
+}
+
+function refreshEditorFromState() {
+  resumeTitle.value = state.title;
+  form.querySelectorAll("[data-path]").forEach((input) => {
+    input.value = getAtPath(state, input.dataset.path) ?? "";
+  });
+  document.querySelectorAll("[data-title-key]").forEach((input) => {
+    input.value = state.sectionTitles[input.dataset.titleKey] ?? "";
+  });
+  document.querySelectorAll("[data-field-label-input]").forEach((input) => {
+    input.value =
+      getAtPath(state.fieldLabels, input.dataset.fieldLabelInput) ??
+      getAtPath(originalResume.fieldLabels, input.dataset.fieldLabelInput);
+  });
+  renderEditors();
+  renderSectionOrderEditor();
+  renderPreview();
+}
+
+function applyImportedResume(recognition, mode) {
+  if (mode === "merge") {
+    Object.entries(recognition.basic).forEach(([key, value]) => {
+      if (!state.basic[key] && value) state.basic[key] = value;
+    });
+    state.education = mergeImportedEntries(
+      state.education,
+      recognition.education,
+      originalResume.education[0],
+    );
+    state.work = mergeImportedEntries(state.work, recognition.work, originalResume.work[0]);
+    state.projects = mergeImportedEntries(
+      state.projects,
+      recognition.projects,
+      originalResume.projects[0],
+    );
+    state.skills = [state.skills, recognition.skills].filter((value) => String(value || "").trim()).join("\n");
+  } else {
+    state.basic = { ...clone(originalResume.basic), ...clone(recognition.basic) };
+    state.education = entriesForImport(recognition.education, originalResume.education[0]);
+    state.work = entriesForImport(recognition.work, originalResume.work[0]);
+    state.projects = entriesForImport(recognition.projects, originalResume.projects[0]);
+    state.skills = recognition.skills || "";
+  }
+
+  if (
+    recognition.basic.name &&
+    (!state.title.trim() || state.title === originalResume.title || mode === "replace")
+  ) {
+    state.title = `${recognition.basic.name}的简历`;
+  }
+
+  refreshEditorFromState();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  saveState.classList.remove("saving");
+  saveStatus.textContent = "简历已导入";
+  importDialog.close();
+  document.querySelector(".editor-panel").scrollTo({ top: 0, behavior: "smooth" });
+}
+
 document.querySelectorAll("[data-add]").forEach((button) => {
   button.addEventListener("click", () => addItem(button.dataset.add));
+});
+
+document.querySelector("#importResumeButton").addEventListener("click", () => {
+  resumeImportInput.click();
+});
+
+document.querySelector("#chooseAnotherResume").addEventListener("click", () => {
+  resumeImportInput.click();
+});
+
+document.querySelector("#retryImportFile").addEventListener("click", () => {
+  resumeImportInput.click();
+});
+
+resumeImportInput.addEventListener("change", (event) => {
+  processImportFile(event.target.files?.[0]);
+});
+
+document.querySelector("#closeImportDialog").addEventListener("click", () => importDialog.close());
+document.querySelector("#cancelImport").addEventListener("click", () => importDialog.close());
+
+rerunRecognitionButton.addEventListener("click", () => {
+  try {
+    const text = window.ResumeImporter.normalizeText(importExtractedText.value);
+    const recognition = window.ResumeImporter.recognizeResumeText(text);
+    showImportRecognition(currentImportFile, text, recognition);
+    document.querySelector("#recognitionQuality").textContent = "已重新识别";
+  } catch (error) {
+    setImportStatus("无法重新识别", error?.message || "请检查简历文字后重试。", true);
+  }
+});
+
+applyImportButton.addEventListener("click", () => {
+  if (!currentImportRecognition) return;
+  const mode = document.querySelector('input[name="importMode"]:checked')?.value || "replace";
+  applyImportedResume(currentImportRecognition, mode);
 });
 
 document.querySelector("#avatarInput").addEventListener("change", (event) => {
