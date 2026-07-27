@@ -60,8 +60,11 @@
 
   function normalizeText(value) {
     return String(value || "")
+      .normalize("NFKC")
       .replace(/\r\n?/g, "\n")
       .replace(/\u00a0/g, " ")
+      .replace(/[┃︱]/g, "｜")
+      .replace(/⻛/g, "风")
       .replace(/[ \t]+/g, " ")
       .replace(/ *\n */g, "\n")
       .replace(/\n{3,}/g, "\n\n")
@@ -70,6 +73,8 @@
 
   function cleanLine(value) {
     return String(value || "")
+      .normalize("NFKC")
+      .replace(/⻛/g, "风")
       .replace(/^[•●▪◦◆◇■□★☆✓✔▶►→·]\s*/, "")
       .replace(/\s+/g, " ")
       .trim();
@@ -111,41 +116,169 @@
     return pdfJsPromise;
   }
 
-  function joinPdfItems(items) {
-    const lines = [];
-    let currentLine = "";
-    let lastY = null;
-
-    items.forEach((item) => {
-      const text = item.str || "";
-      if (!text) return;
-      const y = item.transform?.[5];
-      const startsNewLine = lastY !== null && Number.isFinite(y) && Math.abs(y - lastY) > 3;
-
-      if (startsNewLine && currentLine.trim()) {
-        lines.push(currentLine.trim());
-        currentLine = "";
-      }
-
-      const needsSpace =
-        currentLine &&
-        /[A-Za-z0-9)]$/.test(currentLine) &&
-        /^[A-Za-z0-9(]/.test(text) &&
-        !currentLine.endsWith(" ");
-      currentLine += `${needsSpace ? " " : ""}${text}`;
-
-      if (item.hasEOL && currentLine.trim()) {
-        lines.push(currentLine.trim());
-        currentLine = "";
-      }
-      if (Number.isFinite(y)) lastY = y;
-    });
-
-    if (currentLine.trim()) lines.push(currentLine.trim());
-    return lines.join("\n");
+  function pdfItemMetrics(item) {
+    const transform = item.transform || [];
+    const fontSize = Math.max(
+      Math.abs(Number(transform[0])) || 0,
+      Math.abs(Number(transform[3])) || 0,
+      Math.abs(Number(item.height)) || 0,
+      8,
+    );
+    return {
+      item,
+      text: cleanLine(item.str || ""),
+      x: Number(transform[4]) || 0,
+      y: Number(transform[5]) || 0,
+      width: Math.max(Number(item.width) || 0, 0),
+      fontSize,
+    };
   }
 
-  async function extractPdfText(file) {
+  function separatorForPdfItems(previous, current) {
+    const gap = current.x - (previous.x + previous.width);
+    const referenceSize = Math.max(8, Math.min(previous.fontSize, current.fontSize));
+    if (gap >= Math.max(13, referenceSize * 1.55)) return " | ";
+
+    const previousText = previous.text;
+    const currentText = current.text;
+    const crossesLatinBoundary =
+      (/[A-Za-z0-9)]$/.test(previousText) && /^[A-Za-z0-9(\u3400-\u9fff]/.test(currentText)) ||
+      (/[\u3400-\u9fff]$/.test(previousText) && /^[A-Za-z0-9(]/.test(currentText));
+    if (crossesLatinBoundary && gap > referenceSize * 0.08) {
+      return " ";
+    }
+    return "";
+  }
+
+  function joinPdfItems(items) {
+    const positioned = items.map(pdfItemMetrics).filter((entry) => entry.text);
+    const lines = [];
+
+    positioned
+      .sort((left, right) => right.y - left.y || left.x - right.x)
+      .forEach((entry) => {
+        const tolerance = Math.max(2.2, Math.min(4, entry.fontSize * 0.36));
+        let line = lines.find((candidate) => Math.abs(candidate.y - entry.y) <= tolerance);
+        if (!line) {
+          line = { y: entry.y, items: [] };
+          lines.push(line);
+        }
+        line.items.push(entry);
+        line.y = (line.y * (line.items.length - 1) + entry.y) / line.items.length;
+      });
+
+    return lines
+      .sort((left, right) => right.y - left.y)
+      .map((line) => {
+        const sortedItems = line.items.sort((left, right) => left.x - right.x);
+        return sortedItems
+          .map((entry, index) => {
+            if (!index) return entry.text;
+            return `${separatorForPdfItems(sortedItems[index - 1], entry)}${entry.text}`;
+          })
+          .join("")
+          .replace(/\s*\|\s*(?:\|\s*)+/g, " | ")
+          .replace(/\s{2,}/g, " ")
+          .trim();
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  function pageObject(page, objectId) {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        resolve(value || null);
+      };
+      try {
+        const immediate = page.objs.get(objectId, finish);
+        if (immediate) finish(immediate);
+      } catch {
+        finish(null);
+      }
+      globalScope.setTimeout(() => finish(null), 1200);
+    });
+  }
+
+  function imageObjectToDataUrl(image) {
+    if (!image?.width || !image?.height) return "";
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width;
+    canvas.height = image.height;
+    const context = canvas.getContext("2d", { willReadFrequently: false });
+    if (!context) return "";
+
+    if (image.bitmap) {
+      context.drawImage(image.bitmap, 0, 0, image.width, image.height);
+      return canvas.toDataURL("image/jpeg", 0.9);
+    }
+
+    const source = image.data;
+    if (!source) return "";
+    const pixelCount = image.width * image.height;
+    const rgba = new Uint8ClampedArray(pixelCount * 4);
+    if (source.length === pixelCount * 4) {
+      rgba.set(source);
+    } else if (source.length === pixelCount * 3) {
+      for (let sourceIndex = 0, targetIndex = 0; sourceIndex < source.length; sourceIndex += 3) {
+        rgba[targetIndex++] = source[sourceIndex];
+        rgba[targetIndex++] = source[sourceIndex + 1];
+        rgba[targetIndex++] = source[sourceIndex + 2];
+        rgba[targetIndex++] = 255;
+      }
+    } else if (source.length === pixelCount) {
+      for (let sourceIndex = 0, targetIndex = 0; sourceIndex < source.length; sourceIndex += 1) {
+        const value = source[sourceIndex];
+        rgba[targetIndex++] = value;
+        rgba[targetIndex++] = value;
+        rgba[targetIndex++] = value;
+        rgba[targetIndex++] = 255;
+      }
+    } else {
+      return "";
+    }
+
+    context.putImageData(new ImageData(rgba, image.width, image.height), 0, 0);
+    return canvas.toDataURL("image/jpeg", 0.9);
+  }
+
+  async function extractPdfAvatar(page, pdfjs) {
+    try {
+      const operatorList = await page.getOperatorList();
+      const candidates = [];
+      for (let index = 0; index < operatorList.fnArray.length; index += 1) {
+        const operation = operatorList.fnArray[index];
+        let image = null;
+        if (operation === pdfjs.OPS.paintImageXObject) {
+          image = await pageObject(page, operatorList.argsArray[index]?.[0]);
+        } else if (operation === pdfjs.OPS.paintInlineImageXObject) {
+          image = operatorList.argsArray[index]?.[0] || null;
+        }
+        if (!image?.width || !image?.height) continue;
+
+        const shortSide = Math.min(image.width, image.height);
+        const longSide = Math.max(image.width, image.height);
+        const ratio = longSide / shortSide;
+        if (shortSide < 64 || ratio > 1.8) continue;
+        const area = image.width * image.height;
+        const sizeFit = area <= 1_200_000 ? 1 : 1_200_000 / area;
+        candidates.push({
+          image,
+          score: (1 / ratio) * sizeFit * Math.min(shortSide, 600),
+        });
+      }
+
+      const best = candidates.sort((left, right) => right.score - left.score)[0];
+      return best ? imageObjectToDataUrl(best.image) : "";
+    } catch {
+      return "";
+    }
+  }
+
+  async function extractPdfResume(file) {
     const pdfjs = await getPdfJs();
     const data = new Uint8Array(await file.arrayBuffer());
     const loadingTask = pdfjs.getDocument({
@@ -156,14 +289,23 @@
     });
     const pdf = await loadingTask.promise;
     const pages = [];
+    let avatar = "";
 
     for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
       const page = await pdf.getPage(pageNumber);
       const content = await page.getTextContent();
       pages.push(joinPdfItems(content.items));
+      if (pageNumber === 1) avatar = await extractPdfAvatar(page, pdfjs);
     }
 
-    return normalizeText(pages.join("\n\n"));
+    return {
+      text: normalizeText(pages.join("\n\n")),
+      avatar,
+    };
+  }
+
+  async function extractPdfText(file) {
+    return (await extractPdfResume(file)).text;
   }
 
   async function extractDocxText(file) {
@@ -187,6 +329,17 @@
       return normalizeText(await file.text());
     }
     throw new Error("暂不支持此格式。请选择 PDF、DOCX、TXT 或 Markdown 文件。");
+  }
+
+  async function extractResume(file) {
+    const extension = file.name.split(".").pop()?.toLowerCase();
+    if (file.type === "application/pdf" || extension === "pdf") {
+      return extractPdfResume(file);
+    }
+    return {
+      text: await extractText(file),
+      avatar: "",
+    };
   }
 
   function sectionKeyForLine(line) {
@@ -335,8 +488,15 @@
     const anchorPattern = anchorPatterns[type];
 
     lines.forEach((line) => {
-      const isAnchor = anchorPattern.test(line);
       const hasDate = Boolean(dateRangeFromLine(line));
+      const looksLikeShortHeader =
+        line.length <= 100 && !/[。；;，,：:]/.test(line) && !/^[•●▪◦◆◇■□★☆✓✔▶►→·]/.test(line);
+      const isAnchor =
+        anchorPattern.test(line) &&
+        (type === "projects" ||
+          hasDate ||
+          /^(?:学校|院校|公司|单位)\s*[：:]/i.test(line) ||
+          looksLikeShortHeader);
       const shouldSplit =
         current.length > 0 &&
         ((isAnchor && currentHasAnchor) ||
@@ -357,17 +517,38 @@
 
   function splitParts(line) {
     return String(line || "")
-      .split(/\s{2,}|[|｜]/)
+      .split(/\s{2,}|[|｜]|\u3000{2,}/)
       .map((part) => part.trim())
       .filter(Boolean);
   }
 
+  function joinWrappedText(previous, current) {
+    const needsSpace =
+      (/[A-Za-z0-9)]$/.test(previous) && /^[A-Za-z0-9(\u3400-\u9fff]/.test(current)) ||
+      (/[\u3400-\u9fff]$/.test(previous) && /^[A-Za-z0-9(]/.test(current));
+    return `${previous}${needsSpace ? " " : ""}${current}`;
+  }
+
+  function mergeDescriptionLines(lines) {
+    const merged = [];
+    lines.map(cleanLine).filter(Boolean).forEach((line) => {
+      const startsLabeledItem = /^[^：:]{1,40}[：:]/.test(line);
+      const startsBullet = /^[•●▪◦◆◇■□★☆✓✔▶►→·]/.test(line);
+      if (!merged.length || startsLabeledItem || startsBullet) {
+        merged.push(line);
+      } else {
+        merged[merged.length - 1] = joinWrappedText(merged[merged.length - 1], line);
+      }
+    });
+    return merged;
+  }
+
   function removeUsedLines(lines, usedIndexes) {
-    return lines
+    const remaining = lines
       .filter((_, index) => !usedIndexes.has(index))
       .map(cleanLine)
-      .filter(Boolean)
-      .join("\n");
+      .filter(Boolean);
+    return mergeDescriptionLines(remaining).join("\n");
   }
 
   function parseEducation(lines) {
@@ -390,13 +571,35 @@
 
           if (!school && /大学|学院|学校|中学|university|college|school/i.test(line)) {
             const lineWithoutDate = stripDateRange(line);
+            const columns = splitParts(lineWithoutDate);
+            const schoolColumnIndex = columns.findIndex((part) =>
+              /大学|学院|学校|中学|university|college|school/i.test(part),
+            );
+            const schoolColumn =
+              schoolColumnIndex >= 0 ? columns.slice(0, schoolColumnIndex + 1).join(" | ") : "";
+            const detailColumns =
+              schoolColumnIndex >= 0 ? columns.slice(schoolColumnIndex + 1) : [];
             const degreeMatch = lineWithoutDate.match(
               /(博士|硕士|研究生|本科|学士|大专|专科|高中|ph\.?d|master|bachelor|mba)/i,
             );
-            if (degreeMatch?.index > 0) {
-              school = lineWithoutDate.slice(0, degreeMatch.index).trim();
+            if (schoolColumn && columns.length > 1) {
+              school = schoolColumn;
+              degree ||= firstMatch(
+                detailColumns.join(" "),
+                /(博士|硕士|研究生|本科|学士|大专|专科|高中|ph\.?d|master|bachelor|mba)/i,
+                0,
+              );
+              major ||= detailColumns
+                .filter((part) => !degree || !part.toLowerCase().includes(degree.toLowerCase()))
+                .join(" ")
+                .trim();
+            } else if (degreeMatch?.index > 0) {
+              school = lineWithoutDate.slice(0, degreeMatch.index).replace(/[|｜\s]+$/, "").trim();
               degree ||= degreeMatch[0];
-              major ||= lineWithoutDate.slice(degreeMatch.index + degreeMatch[0].length).trim();
+              major ||= lineWithoutDate
+                .slice(degreeMatch.index + degreeMatch[0].length)
+                .replace(/^[|｜\s]+/, "")
+                .trim();
             } else {
               const schoolMatch = lineWithoutDate.match(
                 /^(.+?(?:大学|学院|学校|中学|university|college|school))\s*(.*)$/i,
@@ -459,13 +662,26 @@
 
           if (!company && /公司|集团|事务所|银行|研究院|工作室|company|limited|ltd\b|inc\b|corp/i.test(line)) {
             const lineWithoutDate = stripDateRange(line);
+            const columns = splitParts(lineWithoutDate);
+            const companyColumnIndex = columns.findIndex((part) =>
+              /公司|集团|事务所|银行|研究院|工作室|company|limited|ltd\b|inc\b|corp/i.test(part),
+            );
             const companyMatch = lineWithoutDate.match(
               /^(.+?(?:有限责任公司|股份有限公司|有限公司|公司|集团|事务所|银行|研究院|工作室|company|limited|ltd\b|inc\b|corp\b))\s*(.*)$/i,
             );
-            company =
-              companyMatch?.[1]?.replace(/^(?:公司|单位)\s*[：:]\s*/, "").trim() ||
-              lineWithoutDate.replace(/^(?:公司|单位)\s*[：:]\s*/, "");
-            role ||= companyMatch?.[2]?.trim() || "";
+            if (companyColumnIndex >= 0 && columns.length > 1) {
+              company = columns
+                .slice(0, companyColumnIndex + 1)
+                .join(" | ")
+                .replace(/^(?:公司|单位)\s*[：:]\s*/, "")
+                .trim();
+              role ||= columns.slice(companyColumnIndex + 1).join(" ").trim();
+            } else {
+              company =
+                companyMatch?.[1]?.replace(/^(?:公司|单位)\s*[：:]\s*/, "").trim() ||
+                lineWithoutDate.replace(/^(?:公司|单位)\s*[：:]\s*/, "");
+              role ||= companyMatch?.[2]?.replace(/^[|｜\s]+/, "").trim() || "";
+            }
             used.add(index);
           }
 
@@ -562,7 +778,7 @@
     const education = parseEducation(sections.education);
     const work = parseWork(sections.work);
     const projects = parseProjects(sections.projects);
-    const skills = sections.skills.map(cleanLine).filter(Boolean).join("\n");
+    const skills = mergeDescriptionLines(sections.skills).join("\n");
 
     return {
       basic,
@@ -582,6 +798,7 @@
   }
 
   globalScope.ResumeImporter = {
+    extractResume,
     extractText,
     normalizeText,
     recognizeResumeText,

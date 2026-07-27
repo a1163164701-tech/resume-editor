@@ -633,6 +633,7 @@ function renderRecognitionSummary(recognition) {
     ["工作经历", summary.workEntries],
     ["项目经历", summary.projectEntries],
     ["技能条目", summary.skillLines],
+    ["头像", recognition.avatar ? 1 : 0],
   ];
   document.querySelector("#recognitionStats").innerHTML = stats
     .map(
@@ -681,8 +682,10 @@ async function processImportFile(file) {
   currentImportRecognition = null;
 
   try {
-    const text = await window.ResumeImporter.extractText(file);
+    const extracted = await window.ResumeImporter.extractResume(file);
+    const text = extracted.text;
     const recognition = window.ResumeImporter.recognizeResumeText(text);
+    recognition.avatar = extracted.avatar || "";
     showImportRecognition(file, text, recognition);
   } catch (error) {
     setImportStatus(
@@ -742,12 +745,19 @@ function applyImportedResume(recognition, mode) {
       originalResume.projects[0],
     );
     state.skills = [state.skills, recognition.skills].filter((value) => String(value || "").trim()).join("\n");
+    if (
+      (!state.avatar || state.avatar === originalResume.avatar) &&
+      recognition.avatar
+    ) {
+      state.avatar = recognition.avatar;
+    }
   } else {
     state.basic = { ...clone(originalResume.basic), ...clone(recognition.basic) };
     state.education = entriesForImport(recognition.education, originalResume.education[0]);
     state.work = entriesForImport(recognition.work, originalResume.work[0]);
     state.projects = entriesForImport(recognition.projects, originalResume.projects[0]);
     state.skills = recognition.skills || "";
+    state.avatar = recognition.avatar || originalResume.avatar;
   }
 
   if (

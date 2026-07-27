@@ -300,8 +300,11 @@ button {
 .photo-editor img {
   width: 72px;
   height: 72px;
+  display: block;
+  flex: 0 0 72px;
   border-radius: 14px;
   object-fit: cover;
+  object-position: center top;
 }
 
 .photo-editor p {
@@ -824,8 +827,11 @@ button {
 .resume-avatar {
   width: 23mm;
   height: 23mm;
+  display: block;
+  flex: 0 0 23mm;
   border-radius: 3mm;
   object-fit: cover;
+  object-position: center top;
 }
 
 .resume-section {
