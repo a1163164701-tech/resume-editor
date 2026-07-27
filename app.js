@@ -460,11 +460,13 @@ function renderRepeatEditor(type, containerId, templateId) {
     const card = fragment.querySelector(".repeat-card");
     card.querySelectorAll("[data-key]").forEach((input) => {
       input.value = item[input.dataset.key] ?? "";
-      input.addEventListener("input", () => {
+      const syncInputToPreview = () => {
         state[type][index][input.dataset.key] = input.value;
         renderPreview();
         markSaving();
-      });
+      };
+      input.addEventListener("input", syncInputToPreview);
+      input.addEventListener("change", syncInputToPreview);
     });
     card.querySelector(".remove-button").addEventListener("click", () => {
       if (state[type].length === 1) return;
