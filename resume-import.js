@@ -727,8 +727,16 @@
         const used = new Set();
         let name = "";
         let subtitle = "";
+        let start = "";
+        let end = "";
 
         block.forEach((line, index) => {
+          const range = dateRangeFromLine(line);
+          if (range && !start) {
+            start = normalizeWorkMonth(range.start);
+            end = /至今|现在|目前|present/i.test(range.end) ? "" : normalizeWorkMonth(range.end);
+            if (!stripDateRange(line)) used.add(index);
+          }
           name ||= labeledValue([line], ["项目类型", "项目类别", "类型", "project type"]);
           subtitle ||= labeledValue([line], ["项目名称", "名称", "project name"]);
           if (/^(?:项目类型|项目类别|类型|项目名称|名称|project type|project name)\s*[：:]/i.test(line)) {
@@ -758,6 +766,8 @@
         return {
           name,
           subtitle,
+          start,
+          end,
           description: removeUsedLines(block, used),
         };
       })

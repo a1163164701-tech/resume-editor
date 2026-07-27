@@ -38,6 +38,8 @@ const originalResume = {
     projects: {
       name: "项目类型",
       subtitle: "项目名称",
+      start: "开始时间",
+      end: "结束时间",
       description: "项目内容",
     },
     skills: {
@@ -85,6 +87,8 @@ const originalResume = {
     {
       name: "",
       subtitle: "",
+      start: "",
+      end: "",
       description: "",
     },
   ],
@@ -556,7 +560,7 @@ function renderPreview() {
             <div class="entry-header">
               <strong>${escapeHtml(item.name)}</strong>
               <span class="entry-meta">${escapeHtml(item.subtitle)}</span>
-              <span></span>
+              <span class="entry-date">${escapeHtml([formatMonth(item.start), formatMonth(item.end)].filter(Boolean).join("-"))}</span>
             </div>
             <div class="labeled-lines">${renderLabeledLines(item.description)}</div>
           </article>`,
@@ -599,6 +603,8 @@ function addItem(type) {
     projects: {
       name: "",
       subtitle: "",
+      start: "",
+      end: "",
       description: "",
     },
   };
